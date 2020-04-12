@@ -41,6 +41,12 @@ def calc_probabilities(gameweek):
         prev_season = request.args.get('prev_season')
     else:
         prev_season = find_previous_season(curr_season)
+        
+    # Add another argument as a sort of sick versioning
+    if 'output' in request.args:
+        output = request.args.get('output')
+    else:
+        output = 'reduced'
 
     # Then format the query
     query = BASE_QUERY.format(
@@ -49,11 +55,15 @@ def calc_probabilities(gameweek):
         input_previous_season=prev_season
         )
 
-    # Then read from the DB - transform into a dictionary of player_id : probability
-    result = pd.read_sql(query, URI).set_index('player_uid').to_dict()['probability']
-
-    # And return this directly as a json
-    return jsonify(result)
+    # Then read from the DB
+    result = pd.read_sql(query, URI)
+    
+    # And transform depending on how the user wants it and return as a json
+    if output == 'reduced':
+        return jsonify(result.set_index('player_uid').to_dict()['probability'])
+    else:
+        # Error handling...
+        return jsonify(result.to_dict('records'))
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
