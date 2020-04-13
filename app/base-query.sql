@@ -6,15 +6,15 @@ I guess what makes most sense is to look for the first match that hasn't happene
 */
 -- First find the next match for each team
 with current_match as (
-select home_team_uid as team_uid, 1 is_home from data_fixtures where gameweek = {input_gameweek} and year = {input_current_season}
+select uid as fixture_uid, home_team_uid as team_uid, 1 is_home from data_fixtures where gameweek = {input_gameweek} and year = {input_current_season}
 union all
-select away_team_uid as team_uid, 0 is_home from data_fixtures where gameweek = {input_gameweek} and year = {input_current_season}
+select uid as fixture_uid, away_team_uid as team_uid, 0 is_home from data_fixtures where gameweek = {input_gameweek} and year = {input_current_season}
 ),
 
 -- Now get the relevant games - the home or away games before this gameweek and aggregate for each player
 this_season_scorers as (
 select 
-c.uid player_uid, c.team_uid, c.position, 
+a.fixture_uid, c.uid player_uid, c.team_uid, c.position, 
 count(distinct d.fixture_uid) num_matches_scored, count(distinct b.uid)  as num_matches
 from current_match a
 
@@ -30,7 +30,7 @@ left join (select distinct fixture_uid, player_uid from data_goals) d on b.uid =
 
 -- Only consider matches before gameweek this season
 where b.gameweek < {input_gameweek} and b.year = {input_current_season}
-group by 1, 2, 3
+group by 1, 2, 3, 4
 ),
 
 -- Now we need to get the past season's games in a similar way, but we will group on position
@@ -44,7 +44,7 @@ from current_match a
 join data_fixtures b 
 on a.team_uid = case when a.is_home = 1 then b.home_team_uid else b.away_team_uid end
 
--- And then get all the players
+-- And then get all the players - warning, what happens when players change teams? Have no way of tying players to teams in seasons
 join data_players c on a.team_uid = c.team_uid
 
 -- And check who scored
@@ -72,7 +72,7 @@ on a.team_uid = b.team_uid
 -- And now calculate the probability
 final_probability as (
 select
-a.player_uid, (a.num_matches_scored + c.num_matches_scored) / (1.0 * (a.num_matches + c.num_matches)) probability
+a.player_uid, a.team_uid, a.fixture_uid, (a.num_matches_scored + c.num_matches_scored) / (1.0 * (a.num_matches + c.num_matches)) probability
 -- First get the team we have to look for in last season
 from this_season_scorers a join join_table b on a.team_uid = b.team_uid 
 
